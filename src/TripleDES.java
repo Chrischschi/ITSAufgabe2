@@ -1,10 +1,10 @@
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * Created by Christian on 28.04.2014.
@@ -22,9 +22,12 @@ public class TripleDES {
     private static final String ENCRYPT_MODE = "encrypt";
     private static final String DECRYPT_MODE = "decrypt";
 
-    private static final int FIELD_LENGTH = 8; //bytes
+    private static final int BLOCK_LENGTH = 8; //bytes, entspricht 64 bit
     static final int DES_KEY_LENGTH = 56; //bits
     static final int TRIPLE_DES_KEY_LENGTH = 3 * DES_KEY_LENGTH;
+
+    //Variablen
+    static byte[] desKey1,desKey2,desKey3,initVector;
 
 
     /**
@@ -55,27 +58,75 @@ public class TripleDES {
         }
         */
 
-        //1. bereite das oeffnen der datei vor
-        Path encryptOrDecryptFilePath = Paths.get("etc",encryptOrDecryptFileName);
+        //1. bereite das oeffnen der eingabe-datei vor
+        Path encryptOrDecryptFilePath = Paths.get(encryptOrDecryptFileName);
         encryptOrDecryptFilePath = encryptOrDecryptFilePath.toAbsolutePath();
 
         //2. extrahiere key und initialisierungsvektor
         //erstelle die arrays für die schlüssel
-        byte[] desKey1 = new byte[FIELD_LENGTH];
-        byte[] desKey2 = new byte[FIELD_LENGTH];
-        byte[] desKey3 = new byte[FIELD_LENGTH];
+        desKey1 = new byte[BLOCK_LENGTH];
+        desKey2 = new byte[BLOCK_LENGTH];
+        desKey3 = new byte[BLOCK_LENGTH];
 
         //erstelle das array für den initialisierungsvektor
-        byte[] initVector = new byte[FIELD_LENGTH];
+        initVector = new byte[BLOCK_LENGTH];
 
         try {
             extractBytesFrom32ByteFileTo4Arrays(keyFileName, desKey1, desKey2, desKey3, initVector);
         } catch (FileNotFoundException f) {
             f.printStackTrace();
-            System.exit(0);
+            System.exit(1);
+        }
+        //3. bereite das oeffnen der ausgabe-datei vor
+        Path outputFilePath = Paths.get(outputFileName);
+        outputFilePath = outputFilePath.toAbsolutePath();
+
+        //4. plaintext einlesen und in bloecke aufteilen
+        List<byte[]> plaintextInBlocks = null;
+        try {
+            plaintextInBlocks = toBlocks(encryptOrDecryptFilePath);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        //5. entschlüssele/verschlüssele
+        switch (mode) {
+            case ENCRYPT_MODE: encrypt(plaintextInBlocks,outputFilePath); break;
+            case DECRYPT_MODE: decrypt(plaintextInBlocks,outputFilePath); break;
+            default: {
+                System.err.println("mode parameter wasn't decrypt or encrypt!");
+                System.exit(1);
+            }
         }
 
 
+    }
+
+    private static List<byte[]> toBlocks(Path pathToPlaintext) throws IOException {
+        List<byte[]> result = new LinkedList<>();
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(pathToPlaintext.toFile());
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+        }
+
+        int len;
+        do {
+            byte[] block = new byte[BLOCK_LENGTH];
+            len = in.read(block);
+            if (len > 0) result.add(block); //unschön, aber mir fällt gerade nichts besseres ein
+        } while(len > 0);
+
+        return result;
+    }
+
+    private static void encrypt(List<byte[]> blocks, Path outputFilePath) {
+
+
+    }
+
+    private static void decrypt(List<byte[]> blocks, Path outputFilePath) {
     }
 
     private static void extractBytesFrom32ByteFileTo4Arrays(String fileName,byte[] arr1,byte[] arr2,
@@ -85,16 +136,16 @@ public class TripleDES {
 
         //alle 4 arrays befuellen
         try {
-            in.read(arr1,0,FIELD_LENGTH);
-            in.read(arr2,0,FIELD_LENGTH);
-            in.read(arr3,0,FIELD_LENGTH);
-            in.read(arr4,0,FIELD_LENGTH);
+            in.read(arr1,0, BLOCK_LENGTH);
+            in.read(arr2,0, BLOCK_LENGTH);
+            in.read(arr3,0, BLOCK_LENGTH);
+            in.read(arr4,0, BLOCK_LENGTH);
         } catch (IOException e) {
             System.err.println("read from key file to arrays failed");
             e.printStackTrace();
         }
 
-        try {
+        try { //input stream schließen
             in.close();
         } catch (IOException e) {
             System.err.println("closing inputStream for key file failed");
